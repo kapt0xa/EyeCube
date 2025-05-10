@@ -3,22 +3,22 @@
 
 namespace cube_game
 	{
-	constexpr int KeyPressedFlag = 0x8000;
-
-	const V2f KeyboardInput::up = {0, 1};
-	const V2f KeyboardInput::down = {0, -1};
-	const V2f KeyboardInput::left = { -1, 0 };
-	const V2f KeyboardInput::right = { 1, 0 };
-	const V2f KeyboardInput::zero = { 0, 0 };
-	const float KeyboardInput::yes = 1;
-	const float KeyboardInput::no = -1;
+	const V3i KeyboardInput::up = V3i::J();
+	const V3i KeyboardInput::down = -V3i::J();
+	const V3i KeyboardInput::left = -V3i::I();
+	const V3i KeyboardInput::right = V3i::I();
+	const V3i KeyboardInput::zero = { 0, 0, 0 };
+	const V3i KeyboardInput::yaw_left = { 0, 0, 1 };
+	const V3i KeyboardInput::jaw_right = { 0, 0, -1 };
+	const int KeyboardInput::yes = 1;
+	const int KeyboardInput::no = -1;
 
 	constexpr int key_pressed = 0x8000;
 	constexpr int key_pressed_once = 0x8000;
-	V2f KeyboardInput::GetMainInput(bool once)
+	V3i KeyboardInput::GetMainInput(bool once)
 	{
 		auto bitmask = once? key_pressed : key_pressed_once;
-		V2f result = zero;
+		V3i result = zero;
 		if (GetAsyncKeyState('W') & bitmask
 			|| GetAsyncKeyState(VK_UP) & bitmask)
 		{
@@ -39,10 +39,18 @@ namespace cube_game
 		{
 			result += right;
 		}
+		if (GetAsyncKeyState('Q') & bitmask)
+		{
+			result += right;
+		}
+		if (GetAsyncKeyState('E') & bitmask)
+		{
+			result += right;
+		}
 		return result;
 	}
 
-	float KeyboardInput::GetLogicInpit(bool once)
+	int KeyboardInput::GetLogicInpit(bool once)
 	{
 		auto bitmask = once ? key_pressed : key_pressed_once;
 		if (GetAsyncKeyState(VK_RETURN) & bitmask)

@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <cmath>
+#include <cassert>
 
 namespace cube_game
 {
@@ -10,6 +11,9 @@ namespace cube_game
 		using Vector::array::array;
 
 		Vector(const ScalarT& x = {}, const ScalarT& y = {}, const ScalarT& z = {}, const ScalarT& w = {});
+		bool operator == (const Vector& right) const;
+		bool operator != (const Vector& right) const;
+		size_t Hash() const;
 
 		ScalarT& X();
 		const ScalarT& X() const;
@@ -19,16 +23,20 @@ namespace cube_game
 		const ScalarT& Z() const;
 		ScalarT& W();
 		const ScalarT& W() const;
-		Vector<ScalarT, 3>& QIm(); // immaginary part of Quaternion
-		const Vector<ScalarT, 3>& QIm() const; // immaginary part of Quaternion
+		// immaginary part of Quaternion
+		Vector<ScalarT, 3>& QIm();
+		// immaginary part of Quaternion
+		const Vector<ScalarT, 3>& QIm() const;
 
 		Vector& operator *= (const ScalarT& scalar);
 		Vector& operator /= (const ScalarT& scalar);
 		Vector& operator += (const Vector& right);
 		Vector& operator -= (const Vector& right);
 
-		Vector operator >> (ptrdiff_t offset) const; // xyz >> 1 = zxy
-		Vector operator << (ptrdiff_t offset) const; // xyz << 1 = yzx
+		// xyz >> 1 = zxy
+		Vector operator >> (ptrdiff_t offset) const;
+		// xyz << 1 = yzx
+		Vector operator << (ptrdiff_t offset) const;
 
 		Vector operator * (const ScalarT& scalar) const;
 		Vector operator / (const ScalarT& scalar) const;
@@ -37,13 +45,18 @@ namespace cube_game
 
 		Vector operator- () const;
 		const Vector& operator+ () const;
-		Vector operator~ () const; // 4d only. returns 1/quat
+		// 2d and 4d only. returns 1/quat or 1/complex
+		Vector operator~ () const;
 
-		Vector Conjugated() const; // 2d or 4d only. threated as complex number
-		Vector operator * (const Vector& right) const; // 0-4 d only. 1d: usual scalar multyply, 2d - complex multiply, 3d - cross product, 4d - quaternion multyply
-		Vector operator / (const Vector& right) const; // 1,2 d only. threated as scalar or complex number
+		// 2d or 4d only. threated as complex number
+		Vector Conjugated() const;
+		// 0-4 d only. 1d: usual scalar multyply, 2d - complex multiply, 3d - cross product, 4d - quaternion multyply
+		Vector operator * (const Vector& right) const;
+		// 1,2 d only. threated as scalar or complex number
+		Vector operator / (const Vector& right) const;
 		ScalarT Dot(const Vector& right) const;
-		Vector Cross(const Vector& right) const; // 3d odly
+		// 3d odly
+		Vector Cross(const Vector& right) const;
 		ScalarT Magnitude2() const;
 		ScalarT Magnitude() const;
 		Vector& Normalize();
@@ -52,25 +65,38 @@ namespace cube_game
 		template<typename OtherScalarT>
 		Vector<OtherScalarT, dimentions> Cast() const;
 		template<typename OtherScalarT>
-		operator Vector<OtherScalarT, dimentions>() const;
+		explicit operator Vector<OtherScalarT, dimentions>() const;
 
 		template<size_t other_dimentions>
 		Vector<ScalarT, other_dimentions> Resized() const;
 		template<size_t other_dimentions>
-		operator Vector<ScalarT, other_dimentions>() const;
+		explicit operator Vector<ScalarT, other_dimentions>() const;
 		template<size_t other_dimentions>
 		const Vector<ScalarT, other_dimentions>& Prefix() const;
 		template<size_t other_dimentions>
 		Vector<ScalarT, other_dimentions>& Prefix();
 
-		static Vector Identity(); // only for 2d and 4d complex numbers
+		// only for 2d and 4d complex numbers
+		static Vector Identity();
+
+		static Vector Zero();
+		static Vector Ones();
+		template<size_t dimention>
+		static Vector Basis();
+		static Vector Basis(size_t dimention);
+		static Vector I();
+		static Vector J();
+		static Vector K();
+		static Vector L();
 	};
 
 	using V2f = Vector<float, 2>;
 	using V3f = Vector<float, 3>;
+	using V4f = Vector<float, 4>;
 	using Quat = Vector<float, 4>;
 	using V2i = Vector<int, 2>;
 	using V3i = Vector<int, 3>;
+	using V4i = Vector<int, 4>;
 
 	template<typename ScalarT, size_t dimentions>
 	struct Matrix : public Vector<Vector<ScalarT, dimentions>, dimentions>
@@ -102,6 +128,39 @@ namespace cube_game
 	using M2f = Matrix<float, 2>;
 	using M3f = Matrix<float, 3>;
 	using M4f = Matrix<float, 4>;
+	using M2i = Matrix<int, 2>;
+	using M3i = Matrix<int, 3>;
+	using M4i = Matrix<int, 4>;
+}
+
+namespace std
+{
+	template<typename ScalarT, size_t dimentions>
+	struct hash<cube_game::Vector<ScalarT,dimentions>>
+	{
+		size_t operator()(const cube_game::Vector<ScalarT, dimentions>& v) const
+		{
+			size_t hash = 0;
+			for (size_t i = 0; i != v.size(); ++i)
+			{
+				constexpr int shifted_golden_ratio = 0x9e3779b9;
+				hash ^= std::hash<ScalarT>()(v[i]) + shifted_golden_ratio + (hash << 6) + (hash >> 2); // provided by chat GPT, keine idee if it is good hashing.
+			}
+			return hash;
+		}
+	};
+}
+
+namespace cube_game
+{
+	template<typename ScalarT, size_t dimentions>
+	using VectorHasher = std::hash<Vector<ScalarT, dimentions>>;
+	using HV2f = VectorHasher<float, 2>;
+	using HV3f = VectorHasher<float, 3>;
+	using HV4f = VectorHasher<float, 4>;
+	using HV2i = VectorHasher<int, 2>;
+	using HV3i = VectorHasher<int, 3>;
+	using HV4i = VectorHasher<int, 4>;
 
 	// vvv implementations vvv ====================================
 
@@ -124,6 +183,31 @@ namespace cube_game
 		{
 			W() = w;
 		}
+	}
+
+	template<typename ScalarT, size_t dimentions>
+	inline bool Vector<ScalarT, dimentions>::operator==(const Vector& right) const
+	{
+		for (size_t i = 0; i != this->size(); ++i)
+		{
+			if ((*this)[i] != right[i])
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	template<typename ScalarT, size_t dimentions>
+	inline bool Vector<ScalarT, dimentions>::operator!=(const Vector& right) const
+	{
+		return !(*this == right);
+	}
+
+	template<typename ScalarT, size_t dimentions>
+	inline size_t Vector<ScalarT, dimentions>::Hash() const
+	{
+		return std::hash<Vector>()(*this);
 	}
 
 	template<typename ScalarT, size_t dimentions>
@@ -423,16 +507,63 @@ namespace cube_game
 	{
 		if constexpr (dimentions == 4)
 		{
-			return Vector({}, {}, {}, { 1 });
+			return L();
 		}
 		else if constexpr (dimentions == 2)
 		{
-			return Vector({ 1 }, {});
+			return I();
 		}
 		else
 		{
 			static_assert(false, "identity exists only for 2d and 4d complex numbers");
 		}
+	}
+
+	template<typename ScalarT, size_t dimentions>
+	inline Vector<ScalarT, dimentions> Vector<ScalarT, dimentions>::Zero()
+	{
+		return Vector();
+	}
+
+	template<typename ScalarT, size_t dimentions>
+	inline Vector<ScalarT, dimentions> Vector<ScalarT, dimentions>::Ones()
+	{
+		Vector ones;
+		ones.fill({ 1 });
+		return ones;
+	}
+
+	template<typename ScalarT, size_t dimentions>
+	inline Vector<ScalarT, dimentions> Vector<ScalarT, dimentions>::Basis(size_t dimention)
+	{
+		assert(dimention < dimentions); // basis dimention should be less than whole vector dimentions count
+		auto basis = Vector();
+		basis[dimention] = ScalarT{ 1 };
+		return basis;
+	}
+
+	template<typename ScalarT, size_t dimentions>
+	inline Vector<ScalarT, dimentions> Vector<ScalarT, dimentions>::I()
+	{
+		return Vector::template Basis<0>();
+	}
+
+	template<typename ScalarT, size_t dimentions>
+	inline Vector<ScalarT, dimentions> Vector<ScalarT, dimentions>::J()
+	{
+		return Vector::template Basis<1>();
+	}
+
+	template<typename ScalarT, size_t dimentions>
+	inline Vector<ScalarT, dimentions> Vector<ScalarT, dimentions>::K()
+	{
+		return Vector::template Basis<2>();
+	}
+
+	template<typename ScalarT, size_t dimentions>
+	inline Vector<ScalarT, dimentions> Vector<ScalarT, dimentions>::L()
+	{
+		return Vector::template Basis<3>();
 	}
 
 	template<typename ScalarT, size_t dimentions>
@@ -489,6 +620,16 @@ namespace cube_game
 		return reinterpret_cast<Vector<ScalarT, other_dimentions>&>(*this);
 	}
 	template<typename ScalarT, size_t dimentions>
+	template<size_t dimention>
+	inline Vector<ScalarT, dimentions> Vector<ScalarT, dimentions>::Basis()
+	{
+		static_assert(dimention < dimentions, "basis dimention should be less than whole vector dimentions count");
+		auto basis = Vector();
+		basis[dimention] = ScalarT{ 1 };
+		return basis;
+	}
+
+	template<typename ScalarT, size_t dimentions>
 	inline Matrix<ScalarT, dimentions> Matrix<ScalarT, dimentions>::Identity()
 	{
 		Matrix identity;
@@ -502,13 +643,12 @@ namespace cube_game
 	template<typename ScalarT, size_t dimentions>
 	inline Matrix<ScalarT, dimentions> Matrix<ScalarT, dimentions>::operator*(const Matrix& right) const
 	{
-		auto right_transponeered = right.Transponeered();
+		auto rt = right.Transponeered();
 		Matrix product;
 		for (size_t i = 0; i != dimentions; ++i)
-			for (size_t j = 0; j != dimentions; ++j)
-			{
-				product[i][j] = (*this)[j].Dot(right_transponeered[j]);
-			}
+		{
+			product[i] = (*this)*rt[i];
+		}
 
 		return product;
 	}
@@ -638,7 +778,7 @@ namespace cube_game
 		Matrix<ScalarT, other_dimentions> resized;
 		for (size_t i = 0; (i != dimentions) && (i != other_dimentions); ++i)
 		{
-			resized[i] = (*this)[i].Resized<other_dimentions>();
+			resized[i] = (*this)[i].template Resized<other_dimentions>();
 		}
 		for (size_t i = dimentions; i < other_dimentions; ++i)
 		{

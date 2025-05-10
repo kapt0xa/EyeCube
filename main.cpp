@@ -1,18 +1,37 @@
-#include <Windows.h>
+#include "GameObjects.h"
+
 #include <iostream>
-#include <chrono>
-#include <thread>
 
 using namespace std;
 
+void Play();
+
 int main()
 {
-	do
-	{
-		auto respond = GetAsyncKeyState(VK_MBUTTON);
-		cout << ((respond & 0x8000) ? "*" : " ") << "\t" << flush << ((respond & 1) ? "*" : " ") << endl;
-		this_thread::sleep_for(chrono::milliseconds(100));
+	Play();
+}
 
-	} while (!GetAsyncKeyState(VK_ESCAPE));
-	while (GetAsyncKeyState(VK_ESCAPE));
+void Play()
+{
+	using namespace cube_game;
+	KeyboardInput input;
+	MapHolder map;
+	std::cout << "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+		<< map.RenderField() << flush;
+	while (true)
+	{
+		if (input.GetLogicInpit() == -1)
+		{
+			while (input.GetLogicInpit() != 0);
+			break;
+		}
+		auto action = input.GetMainInput();
+		if (action != V3i::Zero())
+		{
+			while (input.GetMainInput() != V3i::Zero());
+			map.MoveChip(action);
+			std::cout << "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+				<< map.RenderField() << flush;
+		}
+	}
 }

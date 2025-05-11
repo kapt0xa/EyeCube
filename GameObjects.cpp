@@ -147,7 +147,7 @@ namespace cube_game
 	MapHolder::MapHolder()
 	{
 		map = PositionProcesser::BuildMap();
-		vacant_pos = vacant_chip;//= PositionProcesser::Shuffle(map);
+		vacant_pos = PositionProcesser::Shuffle(map); //problem
 		perspective = M3i::Identity();
 
 		side_sample = PositionProcesser::BuildSideSample();

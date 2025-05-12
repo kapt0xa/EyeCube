@@ -1,300 +1,99 @@
 ﻿#include "GameObjects.h"
 
-#include <vector>
-#include <random>
-#include <chrono>
-#include <cassert>
-#include <cmath>
-#include <iostream>
+#include <utility>
 
 namespace cube_game
 {
-	V3i PositionProcesser::GetMovedPosition(const V3i pos, const V2i& direction, const M3i& perspective)
+	Renderer::Renderer(const V2i& canvas_size)
+		: canvas_size(canvas_size)
 	{
-		auto oppos_persp = perspective.Transponeered();
-		assert((oppos_persp * pos).Z() == field_size);
-		assert(std::abs((oppos_persp * pos).X()) < field_size);
-		assert(std::abs((oppos_persp * pos).Y()) < field_size);
-
-		assert(perspective.X().Magnitude2() == 1);
-		assert(perspective.Y().Magnitude2() == 1);
-		assert(perspective.Z().Magnitude2() == 1);
-		assert(perspective.Det() == 1);
-
-		assert(direction.Magnitude2() == 1);
-		assert((direction.X() == 0) ^ (direction.Y() == 0));
-		
-		auto shift = perspective * direction.Resized<3>();
-		assert(shift.Magnitude2() == 1);
-		assert((shift.X() != 0) ^ (shift.Y() != 0) ^ (shift.Z() != 0)); // ammount of not null is odd - 1 or 3 
-		assert((shift.X() == 0) || (shift.Y() == 0) || (shift.Z() == 0)); // at least one cord is 0
-
-		int axis = 0;
-		for (;; ++axis) // finds whitch axis is the direction of shift;
-		{
-			assert(axis < 3);
-			if (shift[axis] != 0)
-			{
-				break;
-			}
-		}
-
-		auto result = pos + shift;
-		if (std::abs(result[axis]) == field_size)
-		{
-			int secondary_axis = 0;
-			for (;; ++secondary_axis) // finds axis of sube side
-			{
-				assert(secondary_axis < 3);
-				if (std::abs(pos[secondary_axis]) == field_size)
-				{
-					break;
-				}
-			}
-
-			result[secondary_axis] += (result[secondary_axis] < 0) ? 1 : -1;
-		}
-
-		return result;
+		canvas.resize((canvas_size.X() +1) * canvas_size.Y(), ' ');
+		Clear();
 	}
 
-	VecToVecMap PositionProcesser::BuildMap()
+	using Sprite = Renderer::Sprite;
+	Sprite Renderer::GetSprite(V2i begin, V2i size) const
 	{
-		VecToVecMap map;
-		auto side_sample = BuildSideSample();
-		for (const auto& persp : cube_perspectives)
+		Sprite sprite;
+		sprite.reserve(size.Y());
+		for (int j = begin.Y(); j < size.Y(); ++j)
 		{
-			//std::cerr << "----------------------new perspective----------------------\n";
-			for (const auto& line : side_sample)
-				for (const auto& sample_pos : line)
-				{
-					auto pos = persp * sample_pos;
-					auto [_, unique_place] = map.try_emplace(pos, pos);
-					//std::cerr << pos.X() << '\t' << pos.Y() << '\t' << pos.Z() << '\n';
-					assert(unique_place); // position already exists
-				}
+			const char* str_begin = &((*this)[V2i(begin.X(), j)]);
+			const int str_size = size.X();
+			sprite.push_back(std::string(str_begin, str_size));
 		}
-		assert(map.find(vacant_chip) != map.end());
-		return map;
+		return sprite;
 	}
 
-	V3i PositionProcesser::Shuffle(std::unordered_map<V3i, V3i>& map)
+	void Renderer::PutSprite(const Sprite& sprite, V2i begin, V2i repeat, V2i step)
 	{
-		std::vector<V3i*> positions;
-		positions.reserve(map.size());
-		for (auto& [pos, chip] : map)
-		{
-			positions.emplace_back(&chip);
-		}
-
-        auto seed = std::chrono::system_clock::now().time_since_epoch().count();
-        std::mt19937 gen(seed);
-        std::shuffle(positions.begin(), positions.end(), gen);
-
-		V3i* vacant_ptr = nullptr;
-		for (auto& [_, chip] : map)
-		{
-			chip = *positions.back();
-			positions.pop_back();
-			if (chip == vacant_chip)
+		for (int y_repeat = 0; y_repeat < repeat.Y(); ++y_repeat)
+			for (int x_repeat = 0; x_repeat < repeat.X(); ++x_repeat)
 			{
-				vacant_ptr = &chip;
-			}
-		}
-
-		int fail_count = 0;
-		for (auto& [pos, chip] : map)
-		{
-			if (map.find(chip) == map.end())
-			{
-				std::cerr << "chip not found in map\n";
-				std::cerr << "chip: " << chip.X() << '\t' << chip.Y() << '\t' << chip.Z() << '\n';
-				++fail_count;
-			}
-			if (map.find(pos) == map.end())
-			{
-				std::cerr << "position not found in map\n";
-				std::cerr << "position: " << pos.X() << '\t' << pos.Y() << '\t' << pos.Z() << '\n';
-				++fail_count;
-			}
-		}
-		assert(fail_count == 0); // map is not consistent
-
-		assert(vacant_ptr != nullptr); // vacant chip not found
-
-		return *vacant_ptr;
-
-		assert(false); // vacant chip not found
-	}
-
-	V3i PositionProcesser::GetRelativeDeviation(const V3i& current_pos, const V3i& target_pos, const M3i& perspective)
-	{
-		return perspective.Transponeered()*(target_pos - current_pos);
-	}
-
-	std::array<std::array<V3i, field_size * 2 - 1>, field_size * 2 - 1> PositionProcesser::BuildSideSample()
-	{
-		std::array<std::array<V3i, field_size * 2 - 1>, field_size * 2 - 1>
-			side_sample;
-		for (int i = 0, x = 1 - field_size; x < field_size; ++i, ++x)
-			for (int j = 0, y = 1 - field_size; y < field_size; ++j, ++y)
-			{
-				side_sample[i][j] = V3i(x, y, field_size);
-			}
-		return side_sample;
-	}
-
-	MapHolder::MapHolder()
-	{
-		map = PositionProcesser::BuildMap();
-		vacant_pos = PositionProcesser::Shuffle(map); //problem
-		perspective = M3i::Identity();
-
-		side_sample = PositionProcesser::BuildSideSample();
-
-		auto direction = vacant_pos / field_size;
-		assert(direction.Magnitude2() == 1);
-		if (direction.Z() != 0)
-		{
-			if (direction.Z() == -1)
-			{
-				perspective = rot_up * rot_up;
-			}
-			assert(perspective.Det() == 1);
-			assert(perspective.X().Magnitude2() == 1);
-			assert(perspective.Y().Magnitude2() == 1);
-			assert(perspective.Z().Magnitude2() == 1);
-			return;
-		}
-		perspective.Z() = direction;
-		if (perspective.X().Dot(direction) != 0)
-		{
-			perspective.Y() = perspective.Z().Cross(perspective.X());
-		}
-		else
-		{
-			perspective.X() = perspective.Y().Cross(perspective.Z());
-		}
-		assert(perspective.Det() == 1);
-		assert(perspective.X().Magnitude2() == 1);
-		assert(perspective.Y().Magnitude2() == 1);
-		assert(perspective.Z().Magnitude2() == 1);
-	}
-
-	std::string MapHolder::RenderField() const
-	{
-		using Str = std::string;
-		Str field =
-			//	 0000000000111111111122222222
-			//	 0123456789012345678901234567
-				"         [0][u][p]         \n"	// 0 * 28
-				"         [1][u][p]         \n" // 1 * 28
-				"         [2][u][p]         \n" // 2 * 28
-				"[0][l][f][0][i][d][0][r][g]\n" // 3 * 28
-				"[1][l][f][1][i][d][1][r][g]\n" // 4 * 28
-				"[2][l][f][2][i][d][2][r][g]\n" // 5 * 28
-				"         [0][d][n]         \n" // 6 * 28
-				"         [1][d][n]         \n" // 7 * 28
-				"         [2][d][n]         \n";// 8 * 28
-		constexpr int chip_size = 3;
-		constexpr int chip_offset = 1;
-		constexpr int side_offset_x = side_size * chip_size;
-		constexpr int line_length = side_offset_x * 3 + 1; // =28
-		constexpr int side_offset_y = side_size * line_length;
-		constexpr int field_render_size = side_offset_y * 3;
-
-		assert(field.size() == field_render_size);
-
-		M3i current_persp = perspective;
-		int current_pos = 1 * side_offset_y + 1 * side_offset_x + chip_offset;
-
-		auto perspective_filler = [&]()
-			{
-				for (int i = 0; i != side_size; ++i)
-					for (int j = 0; j != side_size; ++j)
+				auto sub_begin = begin + V2i(x_repeat * step.X(), y_repeat * step.Y());
+				for (int j = 0; j < sprite.size(); ++j)
+					for (int i = 0; i < sprite[j].size(); ++i)
 					{
-						char& pixel = field[current_pos + i * chip_size + j * line_length];
-						auto pos = current_persp * side_sample[i][j];
-						const auto& chip_home = map.at(pos);
-						if (chip_home == vacant_chip)
-						{
-							pixel = ' ';
-						}
-						else
-						{
-							auto deviation = PositionProcesser::GetRelativeDeviation(pos, chip_home, perspective);
-							if (deviation.Z() == -2 * field_size)
-							{
-								pixel = 'X';
-							}
-							else if (deviation == V3i::Zero())
-							{
-								pixel = '*';
-							}
-							else
-							{
-								int d_h = std::abs(deviation.X());
-								int d_v = std::abs(deviation.Y());
-								bool horisontal = d_h > d_v;
-								if (d_h == d_v)
-								{
-									horisontal = ((d_h ^ pos.Hash()) % 2) == 0;
-								}
-								if (horisontal)
-								{
-									pixel = (deviation.X() < 0) ? '<' : '>';
-								}
-								else
-								{
-									pixel = (deviation.Y() < 0) ? '^' : 'v';
-								}
-							}
-						}
+						(*this)[sub_begin + V2i(i, j)] = sprite[j][i];
 					}
-			};
-		perspective_filler();
-
-		current_persp = perspective * rot_up;
-		current_pos = 0 * side_offset_y + 1 * side_offset_x + chip_offset;
-		perspective_filler();
-
-		current_persp = perspective * rot_down;
-		current_pos = 2 * side_offset_y + 1 * side_offset_x + chip_offset;
-		perspective_filler();
-
-		current_persp = perspective * rot_left;
-		current_pos = 1 * side_offset_y + 0 * side_offset_x + chip_offset;
-		perspective_filler();
-
-		current_persp = perspective * rot_right;
-		current_pos = 1 * side_offset_y + 2 * side_offset_x + chip_offset;
-		perspective_filler();
-
-		return field;
-	}
-
-	void MapHolder::MoveChip(const V3i& direction)
-	{
-		assert(direction.Magnitude2() == 1);
-
-		if (direction.Z() != 0)
-		{
-			perspective = perspective * rotations.at(direction);
-		}
-		else
-		{
-			const auto swapped_chip = PositionProcesser::GetMovedPosition(vacant_pos, direction.Prefix<2>(), perspective);
-			auto old_direction = vacant_pos / field_size;
-			auto new_direction = swapped_chip / field_size;
-			if (old_direction != new_direction)
-			{
-				assert(old_direction.Magnitude2() == 1);
-				assert(new_direction.Magnitude2() == 1);
-				
-				perspective = perspective * rotations.at(new_direction);
 			}
-			std::swap(map.at(vacant_pos), map.at(swapped_chip));
-			vacant_pos = swapped_chip;
+	}
+	void Renderer::PutSprite(const std::string& sprite, V2i begin, V2i repeat, V2i step)
+	{
+		Sprite sprite_vec = { sprite };
+		PutSprite(sprite_vec, begin, repeat, step);
+	}
+	void Renderer::PutSprite(const char sprite, V2i begin, V2i repeat, V2i step)
+	{
+		Sprite sprite_vec = { {sprite} };
+		PutSprite(sprite_vec, begin, repeat, step);
+	}
+	void Renderer::Clear(char filler)
+	{
+		std::fill(canvas.begin(), canvas.end(), filler);
+		for (int i = 0; i < canvas_size.Y(); ++i)
+		{
+			(*this)[V2i(canvas_size.X(), i)] = '\n';
 		}
 	}
-}
+	const std::string& Renderer::GetCanvas() const
+	{
+		return canvas;
+	}
+	const char& Renderer::operator[](V2i pos) const
+	{
+		return canvas[pos.Y() * (canvas_size.X() + 1) + pos.X()];
+	}
+	char& Renderer::operator[](V2i pos)
+	{
+		return const_cast<char&>(const_cast<const Renderer&>(*this)[pos]);
+	}
+	void ChipData::AutoName()
+	{
+		if (name.empty())
+		{
+			name = 
+				std::to_string(id) + ' ' +
+				symbol + ' ' + 
+				std::to_string(home_pos.X()) + "," +
+				std::to_string(home_pos.Y()) + "," +
+				std::to_string(home_pos.Z());
+		}
+	}
+	char ChipData::GetArrow(V3i actual_pos, M3i perspective) const
+	{
+		auto deviation = perspective * (home_pos - actual_pos);
+		if (deviation.Z() == 2 * field_size)
+			return 'X';
+		if (deviation == V3i::Zero())
+			return '0';
+		bool horizontal = (deviation.X() > deviation.Y());
+		if (deviation.X() == deviation.Y())
+		{
+			horizontal = 1 == ((deviation.X() ^ deviation.Z()) & 1);
+		}
+		return horizontal ?
+			(deviation.X() < 0 ? '<' : '>') :
+			(deviation.Y() < 0 ? 'v' : '^');
+	}
+};

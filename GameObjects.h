@@ -5,70 +5,115 @@
 #include <array>
 #include <unordered_map>
 #include <string>
+#include <vector>
+#include <memory>
 
 namespace cube_game
 {
-	constexpr int field_size = 2;
-	constexpr int side_size = field_size * 2 - 1;
-	using VecToVecMap = std::unordered_map<V3i, V3i>;
-	using VecToMatMap = std::unordered_map<V3i, M3i>;
-
-	const M3i rot_up =		M3i(V3i::I(), -V3i::K(), V3i::J());
-	const M3i rot_down =	M3i(V3i::I(), V3i::K(), -V3i::J());
-	const M3i rot_left =	M3i(V3i::K(), V3i::J(), -V3i::I());
-	const M3i rot_right =	M3i(-V3i::K(), V3i::J(), V3i::I());
-	const M3i yaw_left =	M3i(V3i::J(), -V3i::I(), V3i::K());
-	const M3i yaw_right =	M3i(-V3i::J(), V3i::I(), V3i::K());
-
-	const V3i vacant_chip = V3i::K() * field_size;
-
-	const std::array<M3i, 6> cube_perspectives =
-	{
-		M3i::Identity(),	// [0]
-		rot_down,			// [1]
-		rot_up,				// [2]
-		rot_left,			// [3]
-		rot_right,			// [4]
-		rot_up * rot_up		// [5]
-	};
-
-	const VecToMatMap rotations =
-	{
-		{ V3i::I(), rot_up },
-		{ -V3i::I(), rot_down },
-		{ -V3i::J(), rot_left },
-		{ V3i::J(), rot_right },
-		{ V3i::K(), yaw_left },
-		{ -V3i::K(), yaw_right }
-	};
-
-	class PositionProcesser
+	class Renderer
 	{
 	public:
-		static V3i GetMovedPosition(const V3i pos, const V2i& direction, const M3i& perspective);
+		Renderer(const V2i& canvas_size);
 
-		static VecToVecMap BuildMap();
+		const V2i canvas_size;
 
-		static V3i Shuffle(VecToVecMap& map); // returns position of vacant chip
+		using Sprite = std::vector<std::string>;
 
-		static V3i GetRelativeDeviation(const V3i& current_pos, const V3i& target_pos, const M3i& perspective);
+		Sprite GetSprite(V2i begin, V2i size) const;
+		void PutSprite(const Sprite& sprite, V2i begin, V2i repeat = V2i::Ones(), V2i step = V2i::Ones());
+		void PutSprite(const std::string& sprite, V2i begin, V2i repeat = V2i::Ones(), V2i step = V2i::Ones());
+		void PutSprite(const char sprite, V2i begin, V2i repeat = V2i::Ones(), V2i step = V2i::Ones());
 
-		static std::array<std::array<V3i, field_size * 2 - 1>, field_size * 2 - 1>
-			BuildSideSample();
+		void Clear(char filler = ' ');
+
+		const std::string& GetCanvas() const; // returns the whole canvas as a string
+
+		const char& operator[](V2i pos) const;
+		char& operator[](V2i pos);
+
+	private:
+		std::string canvas;
 	};
 
-	class MapHolder
+	struct ChipData
+	{
+		const V3i home_pos;
+		const V3i home_dir;
+		int field_size;
+		char symbol;
+		std::string name;
+		int id;
+
+		// if name is empty, generate name from id, symbol and position
+		void AutoName();
+		char GetArrow(V3i actual_pos, M3i perspective) const; // returns ><^vX0 depending on deviation from home_pos and perspective
+		int GetDistanceFromHomePos(const V3i& actual_pos) const; // returns distance from home_pos
+	};
+
+	class Field
 	{
 	public:
-		M3i perspective;
+		template<typename T>
+		using Map = std::unordered_map<V3i, T, HV3i>;
+	private:
+		struct PosData
+		{
+			std::unique_ptr<ChipData> chip;
+			const V3i direction;
+			int id;
+		};
+		Map<PosData> map;
+		std::vector<V3i> positions;
+		Map<std::pair<int, int>> sides; // direction -> id_begin, size
+		int common_size;
+		bool is_even;
 		V3i vacant_pos;
-		MapHolder();
-		std::string RenderField() const;
-		void MoveChip(const V3i& direction);
-
-	private:	
-		std::array<std::array<V3i, field_size * 2 - 1>, field_size * 2 - 1>
-			side_sample;
-		VecToVecMap map;
+	public:
+		const ChipData& operator[](const V3i& pos) const;
+		V3i GetVacantPos() const;
+		const V3i& GetDirection(const V3i pos) const;
+		const V3i& GetVacantDirection() const;
+		bool MoveChip(const V3i& direction); // returns true if chip moved
+		std::pair<const V3i*, int> GetChipsOnSide(const V3i& direction) const; // returns pointer to array of chips and size
+		Field& BuildNew(int size, bool is_even);
+	private:
+		int CenterOffset() const;
+		int SideSize() const;
+		int ChipFillStep() const;
+		int ChipStripLen() const;
 	};
-}
+
+	class FieldRenderer
+	{
+	private:
+		Field& field;
+		V3i last_direction;
+		M3i perspective;
+		Renderer renderer;
+		int separator_size = 10;
+		bool use_arrows = true;
+	public:
+		FieldRenderer(Field& field);
+		const M3i& GetPerspective() const;
+		Field& GetField() const;
+		void Render() const;
+		void SwitchRenderType(); // switches between arrows and numbers
+	};
+
+	class Controller
+	{
+	private:
+		FieldRenderer& field_renderer;
+		Field& field;
+		KeyboardInput input;
+	public:
+		Controller(FieldRenderer& field_renderer);
+		void ProcessInput();
+	private:
+		void MoveChip(const V2i& direction);
+		void FixPerspective();
+		void YawPerspective(int direction);
+		void SwitchRenderType();
+	};
+
+};

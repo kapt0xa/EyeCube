@@ -6,9 +6,9 @@ namespace cube_game
 	class KeyboardInput
 	{
 	public:
-		V3i GetMainInput(bool once = false); // up, down, left, right, wasd
-		int GetLogicInpit(bool once = false); // enter, esc
-		bool GetModifierInput(bool once = false); // shift, ctrl, alt
+		V3i GetMainInput(bool once = false); // reads WASDQE and returns 3d vector as input.
+		int GetLogicInpit(bool once = false); // reads ender and escape and returns int as input value
+		bool GetModifierInput(bool once = false); // returns if shift/ctrl/alt is pressed
 
 		static const V3i up;
 		static const V3i down;
